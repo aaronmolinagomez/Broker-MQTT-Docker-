@@ -1,0 +1,69 @@
+version: "3.8"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mqtt-broker
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: unless-stopped
+    networks:
+      - iot-net
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123
+      - DOCKER_INFLUXDB_INIT_ORG=IoT
+      - DOCKER_INFLUXDB_INIT_BUCKET=sensores
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=vqdjNj8tjQAPlBweIuGmLNffxTFWYB3a6E1brI70Reyl5gvAuk5w6XTT-iZFRssJNYhpf2new2A2eBkByJCJCA==
+    volumes:
+      - ./influx/data:/var/lib/influxdb2
+      - ./influx/config:/etc/influxdb2
+    restart: unless-stopped
+    networks:
+      - iot-net
+    # AGREGAR ESTO:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana:/var/lib/grafana
+    restart: unless-stopped
+    networks:
+      - iot-net
+
+  listener:
+    build: ./listener
+    container_name: mqtt-listener
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_started
+      influxdb:
+        condition: service_healthy
+    networks:
+      - iot-net
+
+networks:
+  iot-net:
+    driver: bridge
